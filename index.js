@@ -10,7 +10,6 @@ const ai = new GoogleGenAI({ apiKey: process.env.OPENAI_API_KEY });
 const FB_PAGE_ID = process.env.FB_PAGE_ID;
 const FB_PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN;
 
-
 async function generateCaption() {
 
     const response = await ai.models.generateContent({
@@ -46,7 +45,6 @@ async function postToFacebook(caption) {
   }
 }
 
-// Main function
 async function run() {
   
   const caption = await generateCaption();
