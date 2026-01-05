@@ -1,62 +1,52 @@
-import "dotenv/config";
+import { InferenceClient } from "@huggingface/inference";
+import fs from "fs";
 import axios from "axios";
-import { GoogleGenAI } from "@google/genai";
+import FormData from "form-data";
 
-import schedule from "node-schedule";
-
-const ai = new GoogleGenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// Facebook credentials
 const FB_PAGE_ID = process.env.FB_PAGE_ID;
 const FB_PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN;
+const HF_TOKEN = process.env.HF_TOKEN;
 
-async function generateCaption() {
+const client = new InferenceClient(HF_TOKEN);
 
-    const response = await ai.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: "Generate a short and engaging social media caption for a post about life motivation. The caption should be inspiring and encourage followers to stay active and live longer. Use emojis to make it more appealing. In 2 sentences.",
+async function generateImage() {
+  const image = await client.textToImage({
+    provider: "fal-ai",
+    model: "Qwen/Qwen-Image-2512",
+    inputs: "Astronaut riding a horse",
+    parameters: {
+      num_inference_steps: 5,
+    },
   });
-//   console.log(response.text);
-  return response.text;
+
+  // image is a Blob
+  const buffer = Buffer.from(await image.arrayBuffer());
+  fs.writeFileSync("astronaut.png", buffer);
+
+  console.log("✅ Image generated: astronaut.png");
+  return "astronaut.png";
 }
 
-async function postToFacebook(caption) {
-  if (!caption) return;
+async function postImageToFacebook(imagePath) {
+  const url = `https://graph.facebook.com/v24.0/${FB_PAGE_ID}/photos`;
 
-  const url = `https://graph.facebook.com/v24.0/${FB_PAGE_ID}/feed`;
+  const form = new FormData();
+  form.append("source", fs.createReadStream(imagePath));
+  form.append("message", "🚀 Astronaut riding a horse 🐎");
+  form.append("access_token", FB_PAGE_ACCESS_TOKEN);
 
-  try {
-    const res = await axios.post(
-      url,
-      {
-        message: caption,
-        access_token: FB_PAGE_ACCESS_TOKEN,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
-    );
+  const res = await axios.post(url, form, {
+    headers: {
+      ...form.getHeaders(),
+    },
+  });
 
-    console.log("Posted successfully! Post ID:", res.data.id);
-  } catch (err) {
-    console.error("Error posting to Facebook:", err.response?.data || err.message);
-  }
+  console.log("✅ Posted to Facebook:", res.data.id);
 }
 
 async function run() {
-  
-  const caption = await generateCaption();
-
-  console.log("Caption:\n", caption);
-  console.log("Posting to Facebook...");
-  await postToFacebook(caption);
+  const imagePath = await generateImage();
+  await postImageToFacebook(imagePath);
 }
 
-run();
-
-schedule.scheduleJob('0 * * * *', () => {
-  console.log("Scheduled job triggered at", new Date().toLocaleString());
-  run(); // your function that generates caption and posts to FB
-});
+run().catch(console.error);
